@@ -150,6 +150,14 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .cfggrid label{font-weight:700;font-size:.85rem}
 .cfggrid input{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font:inherit;background:var(--surface);color:var(--fg)}
 @media (max-width:520px){.cfggrid{grid-template-columns:minmax(0,1fr)}}
+.pesorow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:12px}
+.pesobox{display:flex;align-items:center;gap:6px}
+.pesobox input{width:110px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;font:inherit;font-size:1.05rem;font-weight:700;background:var(--bg);color:var(--fg);font-variant-numeric:tabular-nums}
+.pesobox input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pesobox span{font-weight:700;color:var(--muted)}
+.pstats{display:flex;flex-wrap:wrap;gap:8px 24px;margin-bottom:12px}
+.pstats div{font-size:.8rem;color:var(--muted)}
+.pstats b{display:block;font-size:1.15rem;color:var(--fg);font-variant-numeric:tabular-nums}
 .maintabs{display:flex;gap:4px;background:var(--surface);padding:4px;border-radius:999px;box-shadow:var(--shadow)}
 .maintabs button{border:0;background:none;padding:7px 20px;border-radius:999px;font:inherit;font-weight:700;color:var(--muted);cursor:pointer}
 .maintabs button[aria-selected="true"]{background:var(--accent);color:var(--surface)}
@@ -249,6 +257,11 @@ svg text{font-family:var(--body)}
       <div class="moodname" id="moodName"></div>
       <label class="lbl">Hábitos do dia</label>
       <div id="questions"></div>
+      <label class="lbl" for="peso">Peso do dia</label>
+      <div class="pesorow">
+        <div class="pesobox"><input id="peso" type="text" inputmode="decimal" placeholder="Ex.: 82,5" autocomplete="off" aria-describedby="pesoHint"><span>kg</span></div>
+        <span class="status" id="pesoHint"></span>
+      </div>
       <div class="notehead">
         <label class="lbl" for="note">Diário</label>
         <button type="button" class="mic" id="micBtn" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="micTxt">Falar</span></button>
@@ -304,6 +317,7 @@ svg text{font-family:var(--body)}
       </div>
       <div class="kpis full" id="kpis"></div>
       <section class="panel ch full"><button type="button" class="info" data-info="tempo" aria-label="Como funciona: Humor ao longo do tempo">i</button><h3>Humor ao longo do tempo</h3><p class="hint">Cada ponto é um dia (nota de 1 a 7, quanto mais alto melhor). A linha é a média dos últimos 7 dias. As faixas de baixo marcam os hábitos de cada dia.</p><div class="svgwrap" id="cTime"></div></section>
+      <section class="panel ch full"><button type="button" class="info" data-info="peso" aria-label="Como funciona: Peso">i</button><h3>Peso</h3><p class="hint">Cada ponto é um dia em que você registrou o peso.</p><div id="pStats"></div><div class="svgwrap" id="cPeso"></div></section>
       <section class="panel ch"><button type="button" class="info" data-info="habitos" aria-label="Como funciona: Humor com e sem cada hábito">i</button><h3>Humor com e sem cada hábito</h3><p class="hint">Nota média de humor nos dias com o hábito comparada com os dias sem.</p><div class="svgwrap small" id="cHabits"></div>
         <div class="keys"><span><i style="background:var(--accent)"></i>Com</span><span><i style="background:var(--faint)"></i>Sem</span></div></section>
       <section class="panel ch"><button type="button" class="info" data-info="sono" aria-label="Como funciona: Humor por qualidade do sono">i</button><h3>Humor por qualidade do sono</h3><p class="hint">Como os dias se distribuem entre os rostos para cada tipo de noite.</p><div class="svgwrap small" id="cSleep"></div><div class="keys" id="sleepKeys"></div></section>
@@ -433,10 +447,16 @@ function setupMic(){
     $("micBtn").onclick=null; return; }
   $("micBtn").onclick=()=>{ $("micMsg").textContent=""; recOn?stopRec():startRec(); };
 }
+function parsePeso(t){t=String(t??"").trim().replace(",","."); if(!t) return null; const n=+t; return n>=20&&n<=400?Math.round(n*10)/10:NaN;}
+const fmtKg=n=>n.toFixed(1).replace(".",",");
+function pesoHint(){const prev=Object.keys(entries).filter(k=>k<sel&&entries[k].peso!=null).sort().pop();
+  if(!prev){$("pesoHint").textContent="";return} const d=parse(prev);
+  $("pesoHint").textContent=`Último: ${fmtKg(entries[prev].peso)} kg em ${pad(d.getDate())}/${pad(d.getMonth()+1)}`;}
 function loadSel(){
   const d=parse(sel), e=entries[sel];
   $("dateLabel").textContent=(sel===TODAY?"Hoje, ":"")+`${WDL[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`;
   $("nextDay").disabled=sel>=TODAY;
+  $("peso").value=e&&e.peso!=null?fmtKg(e.peso):""; pesoHint();
   pick=e?e.mood:null; ans=e&&e.ans?JSON.parse(JSON.stringify(e.ans)):{}; $("note").value=e?e.note||"":"";
   $("delBtn").hidden=!e; $("confirmDel").hidden=true; $("status").textContent="";
   paintPick();
@@ -452,8 +472,10 @@ function shiftDay(n){const d=parse(sel);d.setDate(d.getDate()+n);selectDate(iso(
 async function save(){
   await stopRec();
   if(!pick){$("status").textContent="Escolha um rosto antes de salvar.";return}
+  const peso=parsePeso($("peso").value);
+  if(Number.isNaN(peso)){$("status").textContent="Peso inválido. Digite só o número em kg, por exemplo 82,5.";$("peso").focus();return}
   Object.keys(ans).forEach(k=>{if(k.endsWith("_outro")){ans[k]=ans[k].trim(); if(!ans[k]) delete ans[k];}});
-  entries[sel]={mood:pick,ans:JSON.parse(JSON.stringify(ans)),note:$("note").value.trim()}; cache(); render(); $("delBtn").hidden=false;
+  entries[sel]={mood:pick,ans:JSON.parse(JSON.stringify(ans)),note:$("note").value.trim()}; if(peso!=null) entries[sel].peso=peso; cache(); render(); $("delBtn").hidden=false;
   $("saveBtn").disabled=true; $("status").textContent="Salvando…";
   await enqueue({data:sel,row:toRow(sel,entries[sel])});
   $("status").textContent=!cfg?"Salvo neste aparelho. Conecte a planilha em Conexão para sincronizar."
@@ -518,7 +540,10 @@ function habitsStats(keys){
     const yes=got.filter(v=>Array.isArray(v)?!v.includes(NO):v==="Sim").length;
     return `<div class="hb">${Q.short}<b>${yes} de ${got.length} dia${got.length>1?"s":""}</b></div>`;
   }).join("");
-  return tiles?`<div class="habits">${tiles}</div>`:"";
+  const pk=keys.filter(k=>entries[k].peso!=null).sort(); let pt="";
+  if(pk.length){const f=entries[pk[0]].peso,l=entries[pk[pk.length-1]].peso,d=l-f;
+    pt=`<div class="hb wide">Peso (último registro)<b>${fmtKg(l)} kg${pk.length>1?` · ${d>0?"+":d<0?"−":""}${fmtKg(Math.abs(d))} kg no período`:""}</b></div>`;}
+  return tiles||pt?`<div class="habits">${pt}${tiles}</div>`:"";
 }
 function stats(keys,label){
   if(!keys.length){$("stats").innerHTML=`<div class="row"><span>Nenhum registro ${label} ainda.</span></div>`;return}
@@ -528,7 +553,7 @@ function stats(keys,label){
    <div class="bar">${[1,2,3,4,5,6,7].filter(l=>cnt[l]).map(l=>`<div style="width:${cnt[l]/keys.length*100}%;background:${MOODS[l].c}" title="${MOODS[l].n}: ${cnt[l]}"></div>`).join("")}</div>${habitsStats(keys)}`;
 }
 function chipsFor(e){
-  const a=e.ans||{}, out=[];
+  const a=e.ans||{}, out=[]; if(e.peso!=null) out.push(fmtKg(e.peso)+" kg");
   QUESTIONS.forEach(Q=>{const v=valOf(Q,a); if(v===undefined) return;
     if(Q.type==="multi") out.push(v.includes(NO)?Q.no:`${Q.short}: ${v.join(" · ")}`);
     else if(Q.id==="sono") out.push("Sono "+v.toLowerCase());
@@ -555,8 +580,8 @@ function render(){
 /* ---------- CSV ---------- */
 const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
 function toCSV(){
-  const rows=[["data","humor","humor_nome",...QUESTIONS.flatMap(Q=>Q.other?[Q.id,Q.id+"_outro"]:[Q.id]),"diario"].join(";")];
-  Object.keys(entries).sort().forEach(k=>{const e=entries[k];rows.push([k,e.mood,q(MOODS[e.mood].n),...QUESTIONS.flatMap(Q=>{const a=e.ans||{},c=[q(csvVal(Q,a[Q.id]))]; if(Q.other) c.push(q(a[Q.id+"_outro"]||"")); return c;}),q(e.note)].join(";"))});
+  const rows=[["data","humor","humor_nome",...QUESTIONS.flatMap(Q=>Q.other?[Q.id,Q.id+"_outro"]:[Q.id]),"peso_kg","diario"].join(";")];
+  Object.keys(entries).sort().forEach(k=>{const e=entries[k];rows.push([k,e.mood,q(MOODS[e.mood].n),...QUESTIONS.flatMap(Q=>{const a=e.ans||{},c=[q(csvVal(Q,a[Q.id]))]; if(Q.other) c.push(q(a[Q.id+"_outro"]||"")); return c;}),e.peso!=null?q(fmtKg(e.peso)):"",q(e.note)].join(";"))});
   return "﻿"+rows.join("\r\n")+"\r\n";
 }
 function csvVal(Q,v){ if(v===undefined) return "";
@@ -578,7 +603,8 @@ function parseCSV(t){
   rows.forEach(r=>{const d=(r[col.data]||"").trim(),m=+r[col.humor]; if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!(m>=1&&m<=7)) return;
     const a={}; QUESTIONS.forEach(Q=>{if(col[Q.id]===undefined) return; const v=fromCsv(Q,r[col[Q.id]]); if(v!==undefined) a[Q.id]=v;
       if(Q.other&&col[Q.id+"_outro"]!==undefined){const o=(r[col[Q.id+"_outro"]]||"").trim(); if(o) a[Q.id+"_outro"]=o;}});
-    out[d]={mood:m,ans:a,note:(col.diario!==undefined?(r[col.diario]||""):"").trim()}});
+    out[d]={mood:m,ans:a,note:(col.diario!==undefined?(r[col.diario]||""):"").trim()};
+    const pw=col.peso_kg!==undefined?parsePeso(r[col.peso_kg]):null; if(pw!=null&&!Number.isNaN(pw)) out[d].peso=pw;});
   return out;
 }
 function downloadCSV(){
@@ -591,10 +617,10 @@ function downloadCSV(){
 const SHEET="diario";
 function toRow(k,e){const a=e.ans||{},r={data:k,humor:String(e.mood),humor_nome:MOODS[e.mood].n};
   QUESTIONS.forEach(Q=>{r[Q.id]=csvVal(Q,a[Q.id]); if(Q.other) r[Q.id+"_outro"]=a[Q.id+"_outro"]||"";});
-  r.diario=e.note||""; r.atualizado_em=new Date().toISOString(); return r;}
+  r.peso_kg=e.peso!=null?fmtKg(e.peso):""; r.diario=e.note||""; r.atualizado_em=new Date().toISOString(); return r;}
 function fromRow(o){const m=+o.humor; if(!/^\d{4}-\d{2}-\d{2}$/.test(o.data||"")||!(m>=1&&m<=7)) return null; const a={};
   QUESTIONS.forEach(Q=>{const v=fromCsv(Q,o[Q.id]); if(v!==undefined) a[Q.id]=v; const t=(o[Q.id+"_outro"]||"").trim(); if(Q.other&&t) a[Q.id+"_outro"]=t;});
-  return {mood:m,ans:a,note:o.diario||""};}
+  const e={mood:m,ans:a,note:o.diario||""}; const pw=parsePeso(o.peso_kg); if(pw!=null&&!Number.isNaN(pw)) e.peso=pw; return e;}
 async function api(body,c=cfg){
   const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),25000);
   try{ const r=await fetch(c.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({...body,token:c.token}),signal:ctl.signal});
@@ -693,6 +719,7 @@ function makeDemo(){
     s=Math.max(1,Math.min(7,Math.round(s)));
     out[k]={mood:8-s,note:"",ans:{sono,fumou:fumou?"Sim":"Não",agua:agua?"Sim":"Não",alcool:alc?"Sim":"Não",
       cardio:cardio.length?cardio:[NO],musculacao:musc.length?musc:[NO],remedio:rem.length?rem:[NO]}};
+    if(rnd()<.7) out[k].peso=Math.round((86.4-4.2*(239-i)/239+Math.sin(i/9)*.6+(rnd()-.5)*.9)*10)/10;
     prevAlc=alc;
   }
   return out;
@@ -728,6 +755,7 @@ const INFO={
  seguinte:"Mostra o humor do dia depois. A barra azul é a nota média dos dias que vieram depois de um dia com aquilo; a cinza, depois de um dia sem. Serve para efeitos que só aparecem no dia seguinte.\n\nExemplo: Álcool com 3,4 na azul e 5,0 na cinza quer dizer que o dia seguinte a beber costuma ser bem pior.",
  semana:"Nota média de humor de cada dia da semana dentro do período. A cor da barra é a do rosto correspondente a essa média.\n\nExemplo: domingo com 3,9 e sexta com 5,3 quer dizer que seus domingos costumam ser os dias mais pesados, e as sextas, os melhores.",
  seq:"Quantos dias seguidos, terminando hoje ou ontem, você cumpriu cada item: \"Não\" em fumou, \"Não\" em álcool, \"Sim\" em água e algum remédio marcado. O recorde é a maior sequência dentro do período. Um dia sem registro interrompe a sequência.\n\nExemplo: Sem álcool com \"1 dia · recorde 9\" quer dizer que você bebeu anteontem e que a maior sequência sem beber no período foi de 9 dias.",
+ peso:"Mostra o peso que você anotou em cada dia, em kg. Os dias sem peso ficam de fora, e a linha liga um registro ao outro.\n\nNo topo: Atual é o último peso do período; Variação é a diferença entre o último e o primeiro registro do período; Mínimo, Máximo e Média são calculados só com os dias que têm peso.\n\nExemplo: Variação −1,8 kg nos últimos 90 dias quer dizer que o último registro está 1,8 kg abaixo do primeiro do período.",
  treinos:"Em quantos dias do período cada tipo de treino foi marcado. Verde é cardio e azul é musculação. Um dia com futebol e corrida conta para os dois.\n\nExemplo: \"Bíceps e costas 15\" quer dizer que você treinou esse grupo em 15 dias do período."
 };
 document.querySelectorAll(".info[data-info]").forEach(b=>b.dataset.tip=INFO[b.dataset.info]);
@@ -800,6 +828,30 @@ function renderWeek(keys,E){
         <text x="${cx}" y="${y(v)-5}" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--fg)">${fmt(v)}</text>`;});
   $("cWeek").innerHTML=g+"</svg>";
 }
+function renderPeso(keys,E){
+  const ks=keys.filter(k=>E[k].peso!=null);
+  if(!ks.length){$("pStats").innerHTML="";$("cPeso").innerHTML=`<div class="empty-state">Nenhum peso registrado no período. Preencha o campo "Peso do dia" na aba Diário.</div>`;return}
+  const v=ks.map(k=>E[k].peso), first=v[0], last=v[v.length-1], d=last-first, mn=Math.min(...v), mx=Math.max(...v);
+  $("pStats").innerHTML=`<div class="pstats"><div>Atual<b>${fmtKg(last)} kg</b></div><div>Variação<b>${ks.length>1?(d>0?"+":d<0?"−":"")+fmtKg(Math.abs(d))+" kg":"–"}</b></div><div>Mínimo<b>${fmtKg(mn)} kg</b></div><div>Máximo<b>${fmtKg(mx)} kg</b></div><div>Média<b>${fmtKg(mean(v))} kg</b></div></div>`;
+  const W=1000,H=210,L=52,R=16,T=12,B=24;
+  let start=parse(ks[0]); if(range){const rs=parse(TODAY); rs.setDate(rs.getDate()-range+1); start=rs;}
+  const days=Math.max(1,Math.round((parse(TODAY)-start)/864e5)+1), cw=(W-L-R)/days;
+  const x=k=>L+cw*(Math.round((parse(k)-start)/864e5)+.5);
+  let lo=Math.floor(mn*2)/2-.5, hi=Math.ceil(mx*2)/2+.5; if(hi-lo<2){const c=(hi+lo)/2;lo=c-1;hi=c+1}
+  const step=[.5,1,2,5,10].find(s=>(hi-lo)/s<=6)||10; lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step;
+  const y=w=>T+(H-T-B)*(1-(w-lo)/(hi-lo));
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  for(let t=lo;t<=hi+1e-9;t+=step) g+=`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}" style="stroke:var(--line)"/><text x="${L-8}" y="${y(t)+4}" text-anchor="end" font-size="11" style="fill:var(--muted)">${step<1?fmtKg(t):t}</text>`;
+  if(days<=31){for(let i=0;i<days;i++){const dd=new Date(start);dd.setDate(dd.getDate()+i);if(days>15&&i%2)continue;g+=`<text x="${x(iso(dd))}" y="${H-6}" text-anchor="middle" font-size="11" style="fill:var(--muted)">${dd.getDate()}</text>`}}
+  else{const m=new Date(start.getFullYear(),start.getMonth()+1,1);for(;m<=parse(TODAY);m.setMonth(m.getMonth()+1)){const xx=x(iso(m))-cw/2;g+=`<line x1="${xx}" x2="${xx}" y1="${T}" y2="${H-B}" style="stroke:var(--line)" stroke-dasharray="3 3"/><text x="${xx+4}" y="${H-6}" font-size="11" style="fill:var(--muted)">${MONTHS[m.getMonth()].slice(0,3)}</text>`}}
+  if(ks.length>1) g+=`<polyline points="${ks.map(k=>x(k).toFixed(1)+","+y(E[k].peso).toFixed(1)).join(" ")}" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  const r=ks.length>60?2.5:4;
+  ks.forEach((k,i)=>{const dd=parse(k),isLast=i===ks.length-1;
+    g+=`<circle cx="${x(k)}" cy="${y(E[k].peso)}" r="${isLast?r+2:r}" style="fill:var(--accent);stroke:var(--surface)" stroke-width="2"/>`;
+    g+=`<circle class="hit" cx="${x(k)}" cy="${y(E[k].peso)}" r="9" data-tip="${esc(`${dd.getDate()} de ${MONTHS[dd.getMonth()].toLowerCase()}: ${fmtKg(E[k].peso)} kg`)}"/>`;});
+  const lk=ks[ks.length-1]; g+=`<text x="${Math.min(x(lk),W-R-4)}" y="${y(last)-12}" text-anchor="end" font-size="12" font-weight="700" style="fill:var(--fg)">${fmtKg(last)} kg</text>`;
+  $("cPeso").innerHTML=g+"</svg>";
+}
 function renderTrain(keys,E){
   const types=[["cardio","Futebol"],["cardio","Corrida"],["cardio","Caminhada"],["cardio","Outros"],["musculacao","Peito, ombro e tríceps"],["musculacao","Bíceps e costas"],["musculacao","Perna, abdômen e lombar"]];
   const counts=types.map(([id,o])=>keys.filter(k=>{const v=(E[k].ans||{})[id];return Array.isArray(v)&&v.includes(o)}).length);
@@ -837,6 +889,7 @@ function renderDash(){
   $("cStreaks").innerHTML=[["fumou","Sem fumar",e=>has(e,"fumou")===false],["alcool","Sem álcool",e=>has(e,"alcool")===false],["agua","Água +2 L",e=>has(e,"agua")===true],["remedio","Remédio tomado",e=>has(e,"remedio")===true]]
     .map(([id,lab,t])=>{const s=streak(keys,E,t);return `<div class="st"><div class="k">${lab}</div><div class="v">${s.cur} <span class="s">dia${s.cur===1?"":"s"}</span></div><div class="s">Recorde: ${s.best} dia${s.best===1?"":"s"}</div></div>`}).join("");
   renderTrain(keys,E);
+  renderPeso(keys,E);
 }
 function setPage(p){page=p;$("pageDiario").hidden=p!=="diario";$("pageDash").hidden=p!=="dash";
   $("tabDiario").setAttribute("aria-selected",p==="diario");$("tabDash").setAttribute("aria-selected",p==="dash");
