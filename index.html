@@ -586,7 +586,7 @@ function renderYear(){
   renderEntries(null,null,true);
 }
 /* Faixas: uma linha por item (humor + cada pergunta), uma coluna por dia do mês. */
-const STRIP_ROWS=[["fumou","Fumou"],["alcool","Álcool"],["cardio","Cardio"],["musculacao","Musculação"],["agua","Água +2 L"],["remedio","Remédio"],["sono","Sono bom"]];
+const STRIP_ROWS=[["remedio","Remédio"],["fumou","Fumou"],["alcool","Álcool"],["cardio","Cardio"],["musculacao","Musculação"],["agua","Água +2 L"],["sono","Sono bom"]];
 function stripCell(e,id){
   const Q=QUESTIONS.find(q=>q.id===id), v=e?valOf(Q,e.ans||{}):undefined;
   if(v===undefined) return ["none","sem resposta"];
