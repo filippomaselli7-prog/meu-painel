@@ -129,14 +129,16 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .strips.dense .sc{border-radius:0}
 .strips.dense .sc.none{box-shadow:none}
 .strips .lb small{display:block;font-weight:400;font-size:.62rem;color:var(--muted)}
-.prow{position:relative;height:46px;border-radius:4px;background:var(--bg)}
+.prow{position:relative;height:64px;border-radius:4px;background:var(--bg)}
 .prow.sep{margin-top:6px}
 .prow.empty{display:flex;align-items:center;justify-content:center;font-size:.72rem;color:var(--muted)}
 .prow svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .prow polyline{fill:none;stroke:var(--accent);stroke-width:1.5;opacity:.6}
 .pdot{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;border:0;padding:0;background:var(--accent);cursor:pointer}
 .pdot.selp{box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--fg)}
-.strips.big .prow{height:90px}
+.strips.big .prow{height:120px}
+.ptxt{position:absolute;transform:translate(-50%,calc(-100% - 6px));font-size:.62rem;font-weight:700;color:var(--fg);white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
+.strips.big .ptxt{font-size:.78rem;transform:translate(-50%,calc(-100% - 8px))}
 .strips.big .prow.sep{margin-top:10px}
 .strips.big .pdot{width:10px;height:10px;margin:-5px 0 0 -5px}
 .strips.big .lb small{font-size:.75rem}
@@ -622,7 +624,7 @@ function stripsGrid(keys,big){
     h+=`<div class="lb${i===0?" sep":""}">${lab}</div>`;
     keys.forEach(k=>{const [c,t]=stripCell(entries[k],id); h+=col(k,c,"",`${lab}: ${t}`,i===0)});
   });
-  h+=pesoRow(keys);
+  h+=pesoRow(keys,big);
   h+="<div></div>";
   const step=big?(N<=40?2:N<=100?5:N<=200?10:0):(N<=45?5:N<=100?10:0), lim=step===2?30:28;
   keys.forEach((k,i)=>{const d=sd(k).getDate(), first=d===1;
@@ -632,13 +634,21 @@ function stripsGrid(keys,big){
   return `<div class="strips${big?" big":""}${dense?" dense":""}" style="grid-template-columns:var(--lbw) repeat(${N},minmax(0,1fr))">${h}</div>`;
 }
 /* Linha do peso: pontos nos dias com pesagem, ligados por uma linha; escala entre o menor e o maior peso do período. */
-function pesoRow(keys){
+function pesoRow(keys,big){
   const N=keys.length, pts=[]; keys.forEach((k,i)=>{const e=entries[k]; if(e&&e.peso!=null) pts.push([i,e.peso,k])});
   if(!pts.length) return `<div class="lb sep">Peso</div><div class="prow sep empty" style="grid-column:2 / -1">Nenhum peso registrado no período</div>`;
   let lo=Math.min(...pts.map(p=>p[1])), hi=Math.max(...pts.map(p=>p[1])); if(hi-lo<1){const m=(hi+lo)/2; lo=m-.5; hi=m+.5}
-  const X=i=>(i+.5)/N*100, Y=v=>8+(1-(v-lo)/(hi-lo))*84;
+  const X=i=>(i+.5)/N*100, Y=v=>34+(1-(v-lo)/(hi-lo))*56;
+  /* Quais pesos ganham número escrito: primeiro, último, menor e maior sempre; os demais só se não encostarem num já escolhido. */
+  const W=big?Math.min(1240,innerWidth*.96)-180:innerWidth<421?innerWidth-130:470, gap=Math.max(1,Math.ceil(N*38/W));
+  const pri=new Set([0,pts.length-1,pts.findIndex(p=>p[1]===Math.min(...pts.map(q=>q[1]))),pts.findIndex(p=>p[1]===Math.max(...pts.map(q=>q[1])))]);
+  const chosen=[]; const fits=i=>chosen.every(j=>Math.abs(pts[j][0]-pts[i][0])>=gap);
+  [...pri].sort((a,b)=>a-b).forEach(i=>{if(fits(i)||i===pts.length-1) chosen.push(i)});
+  pts.forEach((p,i)=>{if(!chosen.includes(i)&&fits(i)) chosen.push(i)});
+  const lab=new Set(chosen);
   const line=pts.length>1?`<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts.map(p=>`${X(p[0])},${Y(p[1])}`).join(" ")}" vector-effect="non-scaling-stroke"/></svg>`:"";
-  const dots=pts.map(([i,v,k])=>{const d=parse(k);return `<button type="button" class="pdot${k===sel?" selp":""}" data-d="${k}" style="left:${X(i)}%;top:${Y(v)}%" title="${d.getDate()}/${pad(d.getMonth()+1)} · ${fmtKg(v)} kg" aria-label="${d.getDate()}/${pad(d.getMonth()+1)}: ${fmtKg(v)} kg"></button>`}).join("");
+  const dots=pts.map(([i,v,k])=>{const d=parse(k);return `<button type="button" class="pdot${k===sel?" selp":""}" data-d="${k}" style="left:${X(i)}%;top:${Y(v)}%" title="${d.getDate()}/${pad(d.getMonth()+1)} · ${fmtKg(v)} kg" aria-label="${d.getDate()}/${pad(d.getMonth()+1)}: ${fmtKg(v)} kg"></button>`}).join("")
+    +pts.map(([i,v],n)=>lab.has(n)?`<span class="ptxt" style="left:${X(i)}%;top:${Y(v)}%">${fmtKg(v)}</span>`:"").join("");
   const mn=Math.min(...pts.map(p=>p[1])), mx=Math.max(...pts.map(p=>p[1]));
   return `<div class="lb sep">Peso<small>${fmtKg(mn)}${mx>mn?`–${fmtKg(mx)}`:""} kg</small></div><div class="prow sep" style="grid-column:2 / -1">${line}${dots}</div>`;
 }
