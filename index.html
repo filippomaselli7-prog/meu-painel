@@ -128,6 +128,18 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .strips.dense{column-gap:0}
 .strips.dense .sc{border-radius:0}
 .strips.dense .sc.none{box-shadow:none}
+.strips .lb small{display:block;font-weight:400;font-size:.62rem;color:var(--muted)}
+.prow{position:relative;height:46px;border-radius:4px;background:var(--bg)}
+.prow.sep{margin-top:6px}
+.prow.empty{display:flex;align-items:center;justify-content:center;font-size:.72rem;color:var(--muted)}
+.prow svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.prow polyline{fill:none;stroke:var(--accent);stroke-width:1.5;opacity:.6}
+.pdot{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;border:0;padding:0;background:var(--accent);cursor:pointer}
+.pdot.selp{box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--fg)}
+.strips.big .prow{height:90px}
+.strips.big .prow.sep{margin-top:10px}
+.strips.big .pdot{width:10px;height:10px;margin:-5px 0 0 -5px}
+.strips.big .lb small{font-size:.75rem}
 .big-btn{display:inline-flex;align-items:center;gap:5px;color:var(--fg)}
 .legend .lbreak{flex-basis:100%;height:0}
 .sdlg{width:min(1240px,96vw);max-height:92vh;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--fg);padding:20px 24px 24px;box-shadow:var(--shadow)}
@@ -610,6 +622,7 @@ function stripsGrid(keys,big){
     h+=`<div class="lb${i===0?" sep":""}">${lab}</div>`;
     keys.forEach(k=>{const [c,t]=stripCell(entries[k],id); h+=col(k,c,"",`${lab}: ${t}`,i===0)});
   });
+  h+=pesoRow(keys);
   h+="<div></div>";
   const step=big?(N<=40?2:N<=100?5:N<=200?10:0):(N<=45?5:N<=100?10:0), lim=step===2?30:28;
   keys.forEach((k,i)=>{const d=sd(k).getDate(), first=d===1;
@@ -617,6 +630,17 @@ function stripsGrid(keys,big){
     h+=`<div class="dn${k===TODAY?" today":""}${first?" mo":""}">${show?(first?(N>100?MONTHS[sd(k).getMonth()].slice(0,3).toLowerCase():stShort(k)):i===0?stShort(k):d):""}</div>`});
   const dense=N>(big?200:120);
   return `<div class="strips${big?" big":""}${dense?" dense":""}" style="grid-template-columns:var(--lbw) repeat(${N},minmax(0,1fr))">${h}</div>`;
+}
+/* Linha do peso: pontos nos dias com pesagem, ligados por uma linha; escala entre o menor e o maior peso do período. */
+function pesoRow(keys){
+  const N=keys.length, pts=[]; keys.forEach((k,i)=>{const e=entries[k]; if(e&&e.peso!=null) pts.push([i,e.peso,k])});
+  if(!pts.length) return `<div class="lb sep">Peso</div><div class="prow sep empty" style="grid-column:2 / -1">Nenhum peso registrado no período</div>`;
+  let lo=Math.min(...pts.map(p=>p[1])), hi=Math.max(...pts.map(p=>p[1])); if(hi-lo<1){const m=(hi+lo)/2; lo=m-.5; hi=m+.5}
+  const X=i=>(i+.5)/N*100, Y=v=>8+(1-(v-lo)/(hi-lo))*84;
+  const line=pts.length>1?`<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts.map(p=>`${X(p[0])},${Y(p[1])}`).join(" ")}" vector-effect="non-scaling-stroke"/></svg>`:"";
+  const dots=pts.map(([i,v,k])=>{const d=parse(k);return `<button type="button" class="pdot${k===sel?" selp":""}" data-d="${k}" style="left:${X(i)}%;top:${Y(v)}%" title="${d.getDate()}/${pad(d.getMonth()+1)} · ${fmtKg(v)} kg" aria-label="${d.getDate()}/${pad(d.getMonth()+1)}: ${fmtKg(v)} kg"></button>`}).join("");
+  const mn=Math.min(...pts.map(p=>p[1])), mx=Math.max(...pts.map(p=>p[1]));
+  return `<div class="lb sep">Peso<small>${fmtKg(mn)}${mx>mn?`–${fmtKg(mx)}`:""} kg</small></div><div class="prow sep" style="grid-column:2 / -1">${line}${dots}</div>`;
 }
 function renderStrips(){
   const keys=stripKeys(), N=keys.length;
@@ -794,10 +818,10 @@ $("nextP").onclick=()=>{if(view==="strips"){shiftStrips(1);return} view!=="year"
 $("view").onchange=e=>{if(e.target.id==="sFrom"||e.target.id==="sTo") setStrips($("sFrom").value,$("sTo").value)};
 $("stripDlgClose").onclick=()=>$("stripDlg").close();
 $("stripDlg").onclick=e=>{if(e.target===e.currentTarget){$("stripDlg").close();return}
-  const c=e.target.closest(".sc:not(.future)"); if(c){$("stripDlg").close(); selectDate(c.dataset.d)}};
+  const c=e.target.closest(".sc:not(.future),.pdot"); if(c){$("stripDlg").close(); selectDate(c.dataset.d)}};
 $("view").onclick=e=>{if(e.target.closest("#stripBig")){openStripDlg();return}
   const q=e.target.closest(".rq");if(q){setStrips(addDays(TODAY,-(+q.dataset.n-1)),TODAY);return}
-  const d=e.target.closest(".day,.sc:not(.future)");if(d){selectDate(d.dataset.d);return}
+  const d=e.target.closest(".day,.sc:not(.future),.pdot");if(d){selectDate(d.dataset.d);return}
   const m=e.target.closest(".mini");if(m){cursor=new Date(cursor.getFullYear(),+m.dataset.m,1);view="month";render()}};
 $("entries").onclick=e=>{const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)};
 $("entries").onkeydown=e=>{if(e.key==="Enter"){const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)}};
