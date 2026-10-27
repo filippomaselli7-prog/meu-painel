@@ -106,6 +106,20 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;margin-top:16px;font-size:.78rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.strips{display:grid;gap:3px 1.5px;align-items:center;max-width:520px;margin:0 auto}
+.strips .lb{font-size:.72rem;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
+.strips .lb.sep{margin-top:6px}
+.sc{height:18px;border-radius:3px;border:0;padding:0;background:none;cursor:pointer;min-width:0;font:inherit}
+.sc.sep{margin-top:6px}
+.sc.no{background:var(--line)}
+.sc.yes{background:var(--accent)}
+.sc.mid{background:var(--accent);opacity:.45}
+.sc.none{box-shadow:inset 0 0 0 1px var(--line)}
+.sc.future{opacity:.25;cursor:default;box-shadow:none;background:none}
+.sc.selc{outline:1.5px solid var(--fg);outline-offset:0}
+.strips .dn{font-size:.65rem;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;overflow:visible;white-space:nowrap}
+.strips .dn.today{color:var(--today);font-weight:700}
+.legend .sq{border-radius:3px}
 .year{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px}
 .mini{background:none;border:0;padding:6px;border-radius:10px;cursor:pointer;text-align:left;font:inherit;color:inherit}
 .mini:hover{background:var(--bg)}
@@ -282,6 +296,7 @@ svg text{font-family:var(--body)}
       <div class="tabs" role="tablist">
         <button type="button" role="tab" id="tabMonth" aria-selected="true">Mês</button>
         <button type="button" role="tab" id="tabYear" aria-selected="false">Ano</button>
+        <button type="button" role="tab" id="tabStrips" aria-selected="false">Faixas</button>
       </div>
       <div class="nav">
         <button type="button" id="prevP" aria-label="Anterior">‹</button>
@@ -356,6 +371,8 @@ const QUESTIONS=[
  {id:"sono",    q:"Qualidade do sono",           type:"one", opts:["Bom","Normal","Ruim"], short:"Sono"}
 ];
 const NO="Não";
+const MOOD_LEGEND=[1,2,3,4,5,6,7].map(l=>`<span><i style="background:${MOODS[l].c}"></i>${MOODS[l].n}</span>`).join("");
+const STRIP_LEGEND=`<span><i class="sq" style="background:var(--accent)"></i>Sim / fez</span><span><i class="sq" style="background:var(--line)"></i>Não</span><span><i class="sq" style="box-shadow:inset 0 0 0 1px var(--line)"></i>Sem resposta</span><span><i class="sq" style="background:var(--accent);opacity:.45"></i>Sono normal</span>`;
 let sel=TODAY, pick=null, view="month";
 let cursor=parse(TODAY); cursor.setDate(1);
 
@@ -527,6 +544,35 @@ function renderYear(){
   stats(Object.keys(entries).filter(k=>k.startsWith(y+"-")),"no ano");
   renderEntries(null,null,true);
 }
+/* Faixas: uma linha por item (humor + cada pergunta), uma coluna por dia do mês. */
+const STRIP_ROWS=[["fumou","Fumou"],["alcool","Álcool"],["cardio","Cardio"],["musculacao","Musculação"],["agua","Água +2 L"],["remedio","Remédio"],["sono","Sono bom"]];
+function stripCell(e,id){
+  const Q=QUESTIONS.find(q=>q.id===id), v=e?valOf(Q,e.ans||{}):undefined;
+  if(v===undefined) return ["none","sem resposta"];
+  if(id==="sono") return v==="Bom"?["yes","bom"]:v==="Normal"?["mid","normal"]:["no","ruim"];
+  if(Array.isArray(v)) return v.includes(NO)?["no","não"]:["yes",v.join(", ")];
+  return v==="Sim"?["yes","sim"]:["no","não"];
+}
+function renderStrips(){
+  const y=cursor.getFullYear(), m=cursor.getMonth(), days=new Date(y,m+1,0).getDate();
+  $("pTitle").textContent=`${MONTHS[m]} ${y}`;
+  const key=d=>`${y}-${pad(m+1)}-${pad(d)}`;
+  const col=(d,cls,st,tip,sep)=>{const s=key(d),fut=s>TODAY;
+    return `<button type="button" class="sc ${fut?"future":cls}${sep?" sep":""}${s===sel?" selc":""}" data-d="${s}"${st&&!fut?` style="${st}"`:""} title="${d}/${pad(m+1)} · ${tip}" aria-label="${d}: ${tip}"></button>`};
+  let h=`<div class="lb">Humor</div>`;
+  for(let d=1;d<=days;d++){const e=entries[key(d)];
+    h+=e?col(d,"",`background:${MOODS[e.mood].c}`,MOODS[e.mood].n):col(d,"none","","sem registro")}
+  STRIP_ROWS.forEach(([id,lab],i)=>{
+    h+=`<div class="lb${i===0?" sep":""}">${lab}</div>`;
+    for(let d=1;d<=days;d++){const [c,t]=stripCell(entries[key(d)],id); h+=col(d,c,"",`${lab}: ${t}`,i===0)}
+  });
+  h+="<div></div>";
+  for(let d=1;d<=days;d++){const s=key(d),show=d===1||d%5===0||s===TODAY;
+    h+=`<div class="dn${s===TODAY?" today":""}">${show?d:""}</div>`}
+  $("view").innerHTML=`<div class="strips" style="grid-template-columns:76px repeat(${days},minmax(0,1fr))">${h}</div>`;
+  const pre=`${y}-${pad(m+1)}`; stats(Object.keys(entries).filter(k=>k.startsWith(pre)),"no mês");
+  renderEntries(pre,`Registros de ${MONTHS[m].toLowerCase()}`);
+}
 function habitsStats(keys){
   const tiles=QUESTIONS.map(Q=>{
     const got=keys.map(k=>valOf(Q,entries[k].ans||{})).filter(v=>v!==undefined);
@@ -566,8 +612,9 @@ function renderEntries(prefix,title,hide){
   $("entries").querySelectorAll(".entry").forEach(el=>{const e=entries[el.dataset.d];el.querySelector("p").textContent=e.note||"Sem texto."});
 }
 function render(){
-  $("tabMonth").setAttribute("aria-selected",view==="month"); $("tabYear").setAttribute("aria-selected",view==="year");
-  view==="month"?renderMonth():renderYear();
+  $("tabMonth").setAttribute("aria-selected",view==="month"); $("tabYear").setAttribute("aria-selected",view==="year"); $("tabStrips").setAttribute("aria-selected",view==="strips");
+  view==="year"?renderYear():view==="strips"?renderStrips():renderMonth();
+  $("legend").innerHTML=view==="strips"?STRIP_LEGEND:MOOD_LEGEND;
   const n=Object.keys(entries).length;
   if(page==="dash") renderDash();
   $("countline").textContent=n?`${n} dia${n>1?"s":""} registrado${n>1?"s":""}`:"Nenhum registro ainda — comece pelo dia de hoje.";
@@ -681,15 +728,15 @@ $("delBtn").onclick=()=>{$("confirmDel").hidden=false};
 $("delNo").onclick=()=>{$("confirmDel").hidden=true};
 $("delYes").onclick=del;
 $("prevDay").onclick=()=>shiftDay(-1); $("nextDay").onclick=()=>shiftDay(1);
-$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()};
-$("prevP").onclick=()=>{view==="month"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
-$("nextP").onclick=()=>{view==="month"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
-$("view").onclick=e=>{const d=e.target.closest(".day");if(d){selectDate(d.dataset.d);return}
+$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()}; $("tabStrips").onclick=()=>{view="strips";render()};
+$("prevP").onclick=()=>{view!=="year"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
+$("nextP").onclick=()=>{view!=="year"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
+$("view").onclick=e=>{const d=e.target.closest(".day,.sc:not(.future)");if(d){selectDate(d.dataset.d);return}
   const m=e.target.closest(".mini");if(m){cursor=new Date(cursor.getFullYear(),+m.dataset.m,1);view="month";render()}};
 $("entries").onclick=e=>{const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)};
 $("entries").onkeydown=e=>{if(e.key==="Enter"){const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)}};
 $("exportBtn").onclick=downloadCSV;
-$("legend").innerHTML=[1,2,3,4,5,6,7].map(l=>`<span><i style="background:${MOODS[l].c}"></i>${MOODS[l].n}</span>`).join("");
+render();
 
 updSync();
 if(!cfg) openCfg(); else sync();
