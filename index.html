@@ -112,10 +112,9 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .strips .lb.sep{margin-top:6px}
 .sc{height:18px;border-radius:2px;border:0;padding:0;background:none;cursor:pointer;min-width:0;font:inherit}
 .sc.sep{margin-top:6px}
-.sc.no{background:var(--line)}
 .sc.yes{background:var(--accent)}
 .sc.mid{background:var(--accent);opacity:.45}
-.sc.none{box-shadow:inset 0 0 0 1px var(--line)}
+.sc.none,.sc.no{box-shadow:inset 0 0 0 1px var(--line)}
 .sc.future{opacity:.25;cursor:default;box-shadow:none;background:none}
 .sc.selc{outline:1.5px solid var(--fg);outline-offset:0}
 .strips .dn{font-size:.65rem;color:var(--muted);text-align:left;font-variant-numeric:tabular-nums;overflow:visible;white-space:nowrap;width:0}
@@ -127,7 +126,7 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .rq.on{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .strips.dense{column-gap:0}
 .strips.dense .sc{border-radius:0}
-.strips.dense .sc.none{box-shadow:none}
+.strips.dense .sc.none,.strips.dense .sc.no{box-shadow:none}
 .strips .lb small{display:block;font-weight:400;font-size:.62rem;color:var(--muted)}
 .prow{position:relative;height:64px;border-radius:4px;background:var(--bg)}
 .prow.sep{margin-top:6px}
@@ -415,7 +414,7 @@ const QUESTIONS=[
 ];
 const NO="Não";
 const MOOD_LEGEND=[1,2,3,4,5,6,7].map(l=>`<span><i style="background:${MOODS[l].c}"></i>${MOODS[l].n}</span>`).join("");
-const STRIP_LEGEND=`<span><i class="sq" style="background:var(--accent)"></i>Sim / fez</span><span><i class="sq" style="background:var(--line)"></i>Não</span><span><i class="sq" style="box-shadow:inset 0 0 0 1px var(--line)"></i>Sem resposta</span><span><i class="sq" style="background:var(--accent);opacity:.45"></i>Sono normal</span>`;
+const STRIP_LEGEND=`<span><i class="sq" style="background:var(--accent)"></i>Sim / fez</span><span><i class="sq" style="box-shadow:inset 0 0 0 1px var(--line)"></i>Não / sem resposta</span><span><i class="sq" style="background:var(--accent);opacity:.45"></i>Sono normal</span>`;
 let sel=TODAY, pick=null, view="month";
 let cursor=parse(TODAY); cursor.setDate(1);
 
