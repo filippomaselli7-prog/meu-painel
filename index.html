@@ -106,10 +106,11 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;margin-top:16px;font-size:.78rem;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
-.strips{display:grid;gap:3px 1.5px;align-items:center;max-width:520px;margin:0 auto}
+.strips{--lbw:76px;display:grid;gap:3px 1px;align-items:center;max-width:620px;margin:0 auto}
+@media (max-width:420px){.strips{--lbw:72px;gap:3px .5px}.strips .lb{font-size:.66rem;padding-right:4px}}
 .strips .lb{font-size:.72rem;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
 .strips .lb.sep{margin-top:6px}
-.sc{height:18px;border-radius:3px;border:0;padding:0;background:none;cursor:pointer;min-width:0;font:inherit}
+.sc{height:18px;border-radius:2px;border:0;padding:0;background:none;cursor:pointer;min-width:0;font:inherit}
 .sc.sep{margin-top:6px}
 .sc.no{background:var(--line)}
 .sc.yes{background:var(--accent)}
@@ -117,7 +118,8 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .sc.none{box-shadow:inset 0 0 0 1px var(--line)}
 .sc.future{opacity:.25;cursor:default;box-shadow:none;background:none}
 .sc.selc{outline:1.5px solid var(--fg);outline-offset:0}
-.strips .dn{font-size:.65rem;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;overflow:visible;white-space:nowrap}
+.strips .dn{font-size:.65rem;color:var(--muted);text-align:left;font-variant-numeric:tabular-nums;overflow:visible;white-space:nowrap;width:0}
+.strips .dn.mo{color:var(--fg);font-weight:700}
 .strips .dn.today{color:var(--today);font-weight:700}
 .legend .sq{border-radius:3px}
 .year{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px}
@@ -553,25 +555,30 @@ function stripCell(e,id){
   if(Array.isArray(v)) return v.includes(NO)?["no","não"]:["yes",v.join(", ")];
   return v==="Sim"?["yes","sim"]:["no","não"];
 }
+const STRIP_DAYS=60; let stripEnd=TODAY;
+function stripKeys(){const d=parse(stripEnd),out=[]; d.setDate(d.getDate()-STRIP_DAYS+1);
+  for(let i=0;i<STRIP_DAYS;i++){out.push(iso(d)); d.setDate(d.getDate()+1)} return out;}
+function shiftStrips(n){const d=parse(stripEnd); d.setDate(d.getDate()+n); stripEnd=iso(d)>TODAY?TODAY:iso(d); render();}
 function renderStrips(){
-  const y=cursor.getFullYear(), m=cursor.getMonth(), days=new Date(y,m+1,0).getDate();
-  $("pTitle").textContent=`${MONTHS[m]} ${y}`;
-  const key=d=>`${y}-${pad(m+1)}-${pad(d)}`;
-  const col=(d,cls,st,tip,sep)=>{const s=key(d),fut=s>TODAY;
-    return `<button type="button" class="sc ${fut?"future":cls}${sep?" sep":""}${s===sel?" selc":""}" data-d="${s}"${st&&!fut?` style="${st}"`:""} title="${d}/${pad(m+1)} · ${tip}" aria-label="${d}: ${tip}"></button>`};
+  const keys=stripKeys(), sd=k=>parse(k), short=k=>{const d=sd(k);return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3).toLowerCase()}`};
+  $("pTitle").textContent=`${short(keys[0])} – ${short(keys[keys.length-1])}`;
+  const col=(s,cls,st,tip,sep)=>{const d=sd(s);
+    return `<button type="button" class="sc ${cls}${sep?" sep":""}${s===sel?" selc":""}" data-d="${s}"${st?` style="${st}"`:""} title="${d.getDate()}/${pad(d.getMonth()+1)} · ${tip}" aria-label="${d.getDate()}/${pad(d.getMonth()+1)}: ${tip}"></button>`};
   let h=`<div class="lb">Humor</div>`;
-  for(let d=1;d<=days;d++){const e=entries[key(d)];
-    h+=e?col(d,"",`background:${MOODS[e.mood].c}`,MOODS[e.mood].n):col(d,"none","","sem registro")}
+  keys.forEach(k=>{const e=entries[k]; h+=e?col(k,"",`background:${MOODS[e.mood].c}`,MOODS[e.mood].n):col(k,"none","","sem registro")});
   STRIP_ROWS.forEach(([id,lab],i)=>{
     h+=`<div class="lb${i===0?" sep":""}">${lab}</div>`;
-    for(let d=1;d<=days;d++){const [c,t]=stripCell(entries[key(d)],id); h+=col(d,c,"",`${lab}: ${t}`,i===0)}
+    keys.forEach(k=>{const [c,t]=stripCell(entries[k],id); h+=col(k,c,"",`${lab}: ${t}`,i===0)});
   });
   h+="<div></div>";
-  for(let d=1;d<=days;d++){const s=key(d),show=d===1||d%5===0||s===TODAY;
-    h+=`<div class="dn${s===TODAY?" today":""}">${show?d:""}</div>`}
-  $("view").innerHTML=`<div class="strips" style="grid-template-columns:76px repeat(${days},minmax(0,1fr))">${h}</div>`;
-  const pre=`${y}-${pad(m+1)}`; stats(Object.keys(entries).filter(k=>k.startsWith(pre)),"no mês");
-  renderEntries(pre,`Registros de ${MONTHS[m].toLowerCase()}`);
+  keys.forEach((k,i)=>{const d=sd(k).getDate(), first=d===1;
+    const show=first||(d%10===0&&d<28)||(i===0&&d<26&&d>3);
+    h+=`<div class="dn${k===TODAY?" today":""}${first?" mo":""}">${show?(first||i===0?short(k):d):""}</div>`});
+  $("view").innerHTML=`<div class="strips">${h}</div>`;
+  $("view").firstChild.style.gridTemplateColumns=`var(--lbw) repeat(${STRIP_DAYS},minmax(0,1fr))`;
+  const inRange=Object.keys(entries).filter(k=>k>=keys[0]&&k<=keys[keys.length-1]);
+  stats(inRange,stripEnd===TODAY?`nos últimos ${STRIP_DAYS} dias`:"no período");
+  renderEntries(k=>k>=keys[0]&&k<=keys[keys.length-1],`Registros de ${short(keys[0])} a ${short(keys[keys.length-1])}`);
 }
 function habitsStats(keys){
   const tiles=QUESTIONS.map(Q=>{
@@ -605,8 +612,8 @@ function chipsFor(e){
 function renderEntries(prefix,title,hide){
   const sec=$("entries").closest("section"); sec.hidden=!!hide; if(hide) return;
   $("entriesTitle").textContent=title;
-  const keys=Object.keys(entries).filter(k=>k.startsWith(prefix)).sort().reverse();
-  if(!keys.length){$("entries").innerHTML=`<div class="empty-state">Nenhum registro neste mês. Escolha um rosto no topo e escreva sobre o seu dia.</div>`;return}
+  const keys=Object.keys(entries).filter(typeof prefix==="function"?prefix:k=>k.startsWith(prefix)).sort().reverse();
+  if(!keys.length){$("entries").innerHTML=`<div class="empty-state">Nenhum registro neste período. Escolha um rosto no topo e escreva sobre o seu dia.</div>`;return}
   $("entries").innerHTML=keys.map(k=>{const e=entries[k],d=parse(k);
     return `<div class="entry" data-d="${k}" role="button" tabindex="0">${face(e.mood,32)}<div><div class="d">${WDL[d.getDay()]}, ${d.getDate()} · <span style="color:${MOODS[e.mood].c}">${MOODS[e.mood].n}</span></div>${chipsFor(e)}<p class="${e.note?"":"empty"}"></p></div></div>`}).join("");
   $("entries").querySelectorAll(".entry").forEach(el=>{const e=entries[el.dataset.d];el.querySelector("p").textContent=e.note||"Sem texto."});
@@ -728,9 +735,9 @@ $("delBtn").onclick=()=>{$("confirmDel").hidden=false};
 $("delNo").onclick=()=>{$("confirmDel").hidden=true};
 $("delYes").onclick=del;
 $("prevDay").onclick=()=>shiftDay(-1); $("nextDay").onclick=()=>shiftDay(1);
-$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()}; $("tabStrips").onclick=()=>{view="strips";render()};
-$("prevP").onclick=()=>{view!=="year"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
-$("nextP").onclick=()=>{view!=="year"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
+$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()}; $("tabStrips").onclick=()=>{view="strips";stripEnd=TODAY;render()};
+$("prevP").onclick=()=>{if(view==="strips"){shiftStrips(-STRIP_DAYS);return} view!=="year"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
+$("nextP").onclick=()=>{if(view==="strips"){shiftStrips(STRIP_DAYS);return} view!=="year"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
 $("view").onclick=e=>{const d=e.target.closest(".day,.sc:not(.future)");if(d){selectDate(d.dataset.d);return}
   const m=e.target.closest(".mini");if(m){cursor=new Date(cursor.getFullYear(),+m.dataset.m,1);view="month";render()}};
 $("entries").onclick=e=>{const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)};
