@@ -119,6 +119,15 @@ textarea{width:100%;min-height:140px;resize:vertical;border:1px solid var(--line
 .sc.future{opacity:.25;cursor:default;box-shadow:none;background:none}
 .sc.selc{outline:1.5px solid var(--fg);outline-offset:0}
 .strips .dn{font-size:.65rem;color:var(--muted);text-align:left;font-variant-numeric:tabular-nums;overflow:visible;white-space:nowrap;width:0}
+.srange{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;margin:0 auto 14px;font-size:.82rem;color:var(--muted)}
+.srange label{display:inline-flex;align-items:center;gap:6px}
+.srange input{border:1px solid var(--line);border-radius:10px;padding:5px 8px;font:inherit;background:var(--surface);color:var(--fg)}
+.rqs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.rq{border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;padding:3px 10px;font:inherit;font-size:.78rem;cursor:pointer}
+.rq.on{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.strips.dense{column-gap:0}
+.strips.dense .sc{border-radius:0}
+.strips.dense .sc.none{box-shadow:none}
 .strips .dn.mo{color:var(--fg);font-weight:700}
 .strips .dn.today{color:var(--today);font-weight:700}
 .legend .sq{border-radius:3px}
@@ -555,13 +564,27 @@ function stripCell(e,id){
   if(Array.isArray(v)) return v.includes(NO)?["no","não"]:["yes",v.join(", ")];
   return v==="Sim"?["yes","sim"]:["no","não"];
 }
-const STRIP_DAYS=60; let stripEnd=TODAY;
-function stripKeys(){const d=parse(stripEnd),out=[]; d.setDate(d.getDate()-STRIP_DAYS+1);
-  for(let i=0;i<STRIP_DAYS;i++){out.push(iso(d)); d.setDate(d.getDate()+1)} return out;}
-function shiftStrips(n){const d=parse(stripEnd); d.setDate(d.getDate()+n); stripEnd=iso(d)>TODAY?TODAY:iso(d); render();}
+const STRIP_MAX=366;
+const addDays=(k,n)=>{const d=parse(k); d.setDate(d.getDate()+n); return iso(d)};
+const daysBetween=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+let stripEnd=TODAY, stripStart=addDays(TODAY,-59);
+function setStrips(a,b){
+  if(!a||!b) return; if(a>b) [a,b]=[b,a];
+  if(b>TODAY) b=TODAY; if(a>b) a=b;
+  if(daysBetween(a,b)>=STRIP_MAX) a=addDays(b,-(STRIP_MAX-1));
+  stripStart=a; stripEnd=b; render();
+}
+function stripKeys(){const out=[]; for(let k=stripStart;k<=stripEnd;k=addDays(k,1)) out.push(k); return out;}
+function shiftStrips(dir){const n=daysBetween(stripStart,stripEnd)+1;
+  if(dir>0&&stripEnd>=TODAY) return;
+  let b=addDays(stripEnd,dir*n); if(b>TODAY) b=TODAY;
+  setStrips(addDays(b,-(n-1)),b);}
 function renderStrips(){
   const keys=stripKeys(), sd=k=>parse(k), short=k=>{const d=sd(k);return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3).toLowerCase()}`};
-  $("pTitle").textContent=`${short(keys[0])} – ${short(keys[keys.length-1])}`;
+  const N=keys.length, yr=k=>sd(k).getFullYear()!==sd(TODAY).getFullYear()?" "+sd(k).getFullYear():"";
+  $("pTitle").textContent=`${short(keys[0])}${yr(keys[0])} – ${short(keys[N-1])}${yr(keys[N-1])}`;
+  const quick=[30,60,90,180].map(n=>{const on=stripEnd===TODAY&&N===n;return `<button type="button" class="rq${on?" on":""}" data-n="${n}" aria-pressed="${on}">${n} dias</button>`}).join("");
+  const ctl=`<div class="srange"><label>De <input type="date" id="sFrom" value="${keys[0]}" max="${TODAY}"></label><label>até <input type="date" id="sTo" value="${keys[N-1]}" max="${TODAY}"></label><div class="rqs">${quick}</div></div>`;
   const col=(s,cls,st,tip,sep)=>{const d=sd(s);
     return `<button type="button" class="sc ${cls}${sep?" sep":""}${s===sel?" selc":""}" data-d="${s}"${st?` style="${st}"`:""} title="${d.getDate()}/${pad(d.getMonth()+1)} · ${tip}" aria-label="${d.getDate()}/${pad(d.getMonth()+1)}: ${tip}"></button>`};
   let h=`<div class="lb">Humor</div>`;
@@ -572,12 +595,11 @@ function renderStrips(){
   });
   h+="<div></div>";
   keys.forEach((k,i)=>{const d=sd(k).getDate(), first=d===1;
-    const show=first||(d%10===0&&d<28)||(i===0&&d<26&&d>3);
-    h+=`<div class="dn${k===TODAY?" today":""}${first?" mo":""}">${show?(first||i===0?short(k):d):""}</div>`});
-  $("view").innerHTML=`<div class="strips">${h}</div>`;
-  $("view").firstChild.style.gridTemplateColumns=`var(--lbw) repeat(${STRIP_DAYS},minmax(0,1fr))`;
+    const step=N<=45?5:N<=100?10:0, show=first||(step&&d%step===0&&d<28)||(i===0&&d<26&&d>3);
+    h+=`<div class="dn${k===TODAY?" today":""}${first?" mo":""}">${show?(first?(N>100?MONTHS[sd(k).getMonth()].slice(0,3).toLowerCase():short(k)):i===0?short(k):d):""}</div>`});
+  $("view").innerHTML=`${ctl}<div class="strips${N>120?" dense":""}" style="grid-template-columns:var(--lbw) repeat(${N},minmax(0,1fr))">${h}</div>`;
   const inRange=Object.keys(entries).filter(k=>k>=keys[0]&&k<=keys[keys.length-1]);
-  stats(inRange,stripEnd===TODAY?`nos últimos ${STRIP_DAYS} dias`:"no período");
+  stats(inRange,stripEnd===TODAY?`nos últimos ${N} dias`:`no período (${N} dias)`);
   renderEntries(k=>k>=keys[0]&&k<=keys[keys.length-1],`Registros de ${short(keys[0])} a ${short(keys[keys.length-1])}`);
 }
 function habitsStats(keys){
@@ -735,10 +757,12 @@ $("delBtn").onclick=()=>{$("confirmDel").hidden=false};
 $("delNo").onclick=()=>{$("confirmDel").hidden=true};
 $("delYes").onclick=del;
 $("prevDay").onclick=()=>shiftDay(-1); $("nextDay").onclick=()=>shiftDay(1);
-$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()}; $("tabStrips").onclick=()=>{view="strips";stripEnd=TODAY;render()};
-$("prevP").onclick=()=>{if(view==="strips"){shiftStrips(-STRIP_DAYS);return} view!=="year"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
-$("nextP").onclick=()=>{if(view==="strips"){shiftStrips(STRIP_DAYS);return} view!=="year"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
-$("view").onclick=e=>{const d=e.target.closest(".day,.sc:not(.future)");if(d){selectDate(d.dataset.d);return}
+$("tabMonth").onclick=()=>{view="month";render()}; $("tabYear").onclick=()=>{view="year";render()}; $("tabStrips").onclick=()=>{view="strips";render()};
+$("prevP").onclick=()=>{if(view==="strips"){shiftStrips(-1);return} view!=="year"?cursor.setMonth(cursor.getMonth()-1):cursor.setFullYear(cursor.getFullYear()-1);render()};
+$("nextP").onclick=()=>{if(view==="strips"){shiftStrips(1);return} view!=="year"?cursor.setMonth(cursor.getMonth()+1):cursor.setFullYear(cursor.getFullYear()+1);render()};
+$("view").onchange=e=>{if(e.target.id==="sFrom"||e.target.id==="sTo") setStrips($("sFrom").value,$("sTo").value)};
+$("view").onclick=e=>{const q=e.target.closest(".rq");if(q){setStrips(addDays(TODAY,-(+q.dataset.n-1)),TODAY);return}
+  const d=e.target.closest(".day,.sc:not(.future)");if(d){selectDate(d.dataset.d);return}
   const m=e.target.closest(".mini");if(m){cursor=new Date(cursor.getFullYear(),+m.dataset.m,1);view="month";render()}};
 $("entries").onclick=e=>{const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)};
 $("entries").onkeydown=e=>{if(e.key==="Enter"){const el=e.target.closest(".entry");if(el)selectDate(el.dataset.d)}};
